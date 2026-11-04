@@ -1,0 +1,12 @@
+import {build} from 'esbuild';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+const result=await build({entryPoints:['src/main.js'],bundle:true,write:false,format:'iife',minify:true,target:'es2022',legalComments:'inline'});
+const script=result.outputFiles[0].text.replaceAll('</script','<\\/script');
+const css=await readFile('src/style.css','utf8');
+const template=await readFile('src/template.html','utf8');
+const html=template.replace('/*__STYLE__*/',css).replace('/*__SCRIPT__*/',()=>script);
+await mkdir('dist',{recursive:true});
+await writeFile('dist/index.html',html);
+const bytes=Buffer.byteLength(html);
+console.log(`Built offline HTML: ${(bytes/1024).toFixed(1)} KB`);
+if(bytes>1_000_000)throw new Error('HTML exceeds the 1 MB target');
