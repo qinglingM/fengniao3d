@@ -1,16 +1,16 @@
 import {createMachine} from './machine.js';
 import {createStage} from './stage.js';
-import {solve,P,TAU,DEG,TOUR,TOUR_DURATION,tourAt,mix} from './model.js';
+import {solve,P,TAU,DEG,TOUR,TOUR_DURATION,tourAt,mix,armPose} from './model.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const state={phase:.62,frequency:28,speed:.025,playing:!reduced,system:'all',xray:false,labels:true,explode:0,view:'hero',tour:!reduced};
+const state={phase:.62,frequency:.6,speed:1,playing:!reduced,system:'all',xray:false,labels:true,explode:0,view:'hero',tour:!reduced};
 let stage,machine,frame=solve(state.phase),last=performance.now(),lastInput=last,tourStart=last,tourIndex=-1;
 let actualExplode=0,frames=0,fpsStart=last,fps=60,lowFpsWindows=0,manualQuality=false,chartRect=null;
 let lastPanelTime=0,suspendedCapture=false,rafId=0;
 const chart=$('#wave-chart'),ctx=chart.getContext('2d');
 const callouts=$$('.callout');
-const systemNames={all:'Assembly',drive:'Drive',wings:'Wings',shell:'Frame',tail:'Tail'};
+const systemNames={all:'Assembly',drive:'Drive',arms:'Arms',hull:'Hull',manifold:'Manifold'};
 
 function fillRange(el,value,min=Number(el.min),max=Number(el.max)) {el.style.setProperty('--fill',`${(value-min)/(max-min)*100}%`);}
 function buttons(selector,attribute,value){$$(selector).forEach(b=>{const on=b.dataset[attribute]===String(value);b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});}
@@ -33,10 +33,10 @@ function takeControl(){
 }
 function selectView(view,instant=false){state.view=view;stage?.setView(view,instant,state.system==='all'?state.explode:0);buttons('[data-view]','view',view);}
 function startTour(){
-  state.tour=true;state.playing=true;tourStart=performance.now();tourIndex=-1;state.frequency=28;state.speed=.025;syncControls();
+  state.tour=true;state.playing=true;tourStart=performance.now();tourIndex=-1;state.frequency=.6;state.speed=1;syncControls();
 }
 function reset(){
-  takeControl();Object.assign(state,{phase:.62,frequency:28,speed:.025,playing:!reduced,system:'all',xray:false,labels:true,explode:0});
+  takeControl();Object.assign(state,{phase:.62,frequency:.6,speed:1,playing:!reduced,system:'all',xray:false,labels:true,explode:0});
   selectView('hero');syncControls();
   $('#stage-message').textContent='';
 }
@@ -52,26 +52,26 @@ function drawChart(s){
   ctx.setLineDash([]);
   const plot=(key,color)=>{
     ctx.beginPath();for(let i=0;i<=120;i++){
-      const f=solve(i/120*TAU,s.frequency),x=i/120*w,y=mid-f[key]*scale;
+      const f=solve(i/120*TAU,s.frequency),x=i/120*w,y=mid-(key==='rootAngle'?armPose(f.phase,0,0).bend:armPose(f.phase,0,5).bend)*DEG*scale;
       i?ctx.lineTo(x,y):ctx.moveTo(x,y);
     }ctx.strokeStyle=color;ctx.lineWidth=1.2;ctx.stroke();
   };
-  plot('featherDegrees','#9aa68b');plot('flapDegrees','#df623e');
+  plot('jointAngle','#9aa68b');plot('rootAngle','#df623e');
   const x=s.phase/TAU*w;
   ctx.strokeStyle='#afb8a1';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(x,top-5);ctx.lineTo(x,bottom+5);ctx.stroke();
-  for(const [key,color] of [['flapDegrees','#df623e'],['featherDegrees','#9aa68b']]){
-    const y=mid-s[key]*scale;ctx.beginPath();ctx.arc(x,y,2.4,0,TAU);ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#f3f2ed';ctx.lineWidth=1;ctx.stroke();
+  for(const [key,color] of [['rootAngle','#df623e'],['jointAngle','#9aa68b']]){
+    const y=mid-(key==='rootAngle'?armPose(s.phase,0,0).bend:armPose(s.phase,0,5).bend)*DEG*scale;ctx.beginPath();ctx.arc(x,y,2.4,0,TAU);ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#f3f2ed';ctx.lineWidth=1;ctx.stroke();
   }
 }
 function updatePanels(s){
-  $('#flap-value').innerHTML=`${s.flapDegrees.toFixed(1)}<span>°</span>`;
-  $('#pitch-value').innerHTML=`${s.featherDegrees.toFixed(1)}<span>°</span>`;
+  $('#flap-value').innerHTML=`${(armPose(s.phase,0,0).bend*DEG).toFixed(1)}<span>°</span>`;
+  $('#pitch-value').innerHTML=`${(armPose(s.phase,0,5).bend*DEG).toFixed(1)}<span>°</span>`;
   $('#slider-value').innerHTML=`${s.displacement.toFixed(2)} <small>mm</small>`;
   $('#rpm-value').innerHTML=`${s.motorRpm.toLocaleString('en-US',{maximumFractionDigits:0})} <small>rpm</small>`;
   const deg=s.phase*DEG;
   $('#phase-value').textContent=`${Math.round(deg).toString().padStart(3,'0')}°`;
   $('#phase').value=deg;fillRange($('#phase'),deg);
-  $('#stroke-label').textContent=s.downstroke?'Downstroke':'Upstroke';
+  $('#stroke-label').textContent=Math.sin(s.phase)>0?'Curl':'Extend';
   drawChart(s);
   const k=6.4,cx=57,cy=72;
   const px=cx+s.crank.x*k,py=cy+s.crank.y*k,bx=cx+s.slider*k;
@@ -84,7 +84,7 @@ function updateLabels(){
   if(!state.labels||!machine)return;
   for(const el of callouts){
     const key=el.dataset.anchor,p=stage.project(machine.anchors[key]());
-    const relevant=state.system==='all'||key===state.system||(state.system==='shell'&&key==='drive');
+    const relevant=state.system==='all'||key===state.system||(state.system==='hull'&&key==='drive');
     el.style.left=`${p.x}px`;el.style.top=`${p.y}px`;el.style.opacity=p.visible&&relevant?'1':'0';
   }
 }
@@ -100,7 +100,7 @@ function updateTour(now){
     tourIndex=beat.index;state.system=beat.system;state.xray=beat.xray;state.explode=beat.explode;
     selectView(beat.view);syncControls();
     $('#stage-message').textContent=beat.detail;
-    const target=beat.index===0?'#tour':beat.index===1?'#xray':beat.index===2?'[data-system="wings"]':beat.index===3?'#explode':beat.index===4?'[data-view="top"]':'[data-view="hero"]';
+    const target=beat.index===0?'#tour':beat.index===1?'#xray':beat.index===2?'[data-system="arms"]':beat.index===3?'#explode':beat.index===4?'[data-view="top"]':'[data-view="hero"]';
     const r=$(target).getBoundingClientRect();
     $('#tour-cursor').style.left=`${r.x+r.width*.6}px`;$('#tour-cursor').style.top=`${r.y+r.height*.5}px`;
   }
@@ -143,7 +143,7 @@ $$('[data-view]').forEach(b=>b.addEventListener('click',()=>{takeControl();selec
 $$('[data-system]').forEach(b=>b.addEventListener('click',()=>{
   takeControl();state.system=b.dataset.system;
   if(state.system==='drive')selectView('detail');
-  else if(state.system==='wings')selectView('front');
+  else if(state.system==='arms')selectView('top');
   else selectView('hero');
   if(state.system==='drive')state.xray=true;
   $('#stage-message').textContent=state.system==='all'?'':`Focus · ${systemNames[state.system]}`;
@@ -175,12 +175,13 @@ async function init(){
     stage=createStage($('#scene'));machine=createMachine(stage.scene);
     machine.update(frame,state);syncControls();updatePanels(frame);stage.draw();
     await stage.warm();
-    for(const visual of [{system:'all',xray:true},{system:'wings',xray:true}]){
+    for(const visual of [{system:'all',xray:true},{system:'arms',xray:true}]){
       machine.update(frame,{...state,...visual});await stage.warm();
     }
     machine.update(frame,state);stage.draw();$('#loading').classList.add('loaded');
     last=performance.now();tourStart=last;lastInput=last;
     rafId=requestAnimationFrame(animate);
+    new ResizeObserver(()=>{stage.draw();updateLabels();}).observe($('#stage'));
     // A deterministic rendering surface for frame capture and the article's review workflow.
     window.study={
       getState:()=>({...state,model:{...frame},actualExplode,fps,quality:stage.quality,drawCalls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles}),
@@ -202,7 +203,7 @@ async function init(){
       const overrides={playing:false};
       if(query.has('phase'))overrides.phase=Number(query.get('phase'))/DEG;
       if(query.has('view')&&['hero','front','side','top','detail'].includes(query.get('view')))overrides.view=query.get('view');
-      if(query.has('system')&&['all','drive','shell','wings','tail'].includes(query.get('system')))overrides.system=query.get('system');
+      if(query.has('system')&&['all','drive','hull','arms','manifold'].includes(query.get('system')))overrides.system=query.get('system');
       if(query.has('explode'))overrides.explode=Math.max(0,Math.min(1,Number(query.get('explode'))));
       window.study.renderAt(Number(query.get('frame'))||0,overrides);
       $('#performance').textContent='Deterministic frame';

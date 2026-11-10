@@ -4,11 +4,11 @@ import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {mix,smooth} from './model.js';
 
 export const VIEWS={
-  hero:{position:[162,86,185],target:[0,5,0]},
-  front:{position:[0,45,330],target:[0,4,4]},
-  side:{position:[315,58,0],target:[0,4,8]},
-  top:{position:[0,345,12],target:[0,0,5]},
-  detail:{position:[53,28,115],target:[0,1,10]},
+  hero:{position:[260,220,300],target:[0,5,0]},
+  front:{position:[0,120,430],target:[0,4,4]},
+  side:{position:[430,125,0],target:[0,4,8]},
+  top:{position:[0,460,12],target:[0,0,5]},
+  detail:{position:[110,100,165],target:[0,25,0]},
 };
 export function createStage(canvas) {
   const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance',preserveDrawingBuffer:true});
@@ -22,7 +22,7 @@ export function createStage(canvas) {
   const controls=new OrbitControls(camera,canvas);
   controls.target.set(...VIEWS.hero.target);
   controls.enableDamping=true;controls.dampingFactor=.09;
-  controls.minDistance=110;controls.maxDistance=650;
+  controls.minDistance=110;controls.maxDistance=850;
   controls.maxPolarAngle=Math.PI*.86;controls.enablePan=false;
   const pmrem=new T.PMREMGenerator(renderer);
   const room=new RoomEnvironment();
